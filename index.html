@@ -1,0 +1,185 @@
+<!DOCTYPE html><html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Error 503</title><style>
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:#efefef;
+  font-family:Arial,Helvetica,sans-serif;
+  color:#333;
+}
+
+.wrapper{
+  max-width:420px;
+  margin:60px auto;
+  background:#f7f7f7;
+  border-radius:6px;
+  padding:30px 20px 35px;
+  text-align:center;
+}
+
+.icon{font-size:48px;color:#f4b400}
+.title{font-size:36px;font-weight:700;color:#d32f2f;margin:5px 0}
+.subtitle{font-size:18px;font-weight:600;margin-bottom:10px}
+.desc{font-size:14px;color:#666;margin-bottom:15px}
+
+.detail-box{
+  background:#eaeaea;
+  border-left:4px solid #d32f2f;
+  padding:12px 14px;
+  margin-top:10px;
+  border-radius:4px;
+  text-align:left;
+  font-size:14px;
+}
+
+input[type=text]{
+  width:100%;
+  padding:12px;
+  border:1px solid #ccc;
+  border-radius:4px;
+  margin-top:8px;
+}
+
+.consent{
+  display:flex;
+  gap:8px;
+  text-align:left;
+  font-size:12px;
+  margin-top:15px;
+}
+
+button{
+  margin:25px auto 15px;
+  display:block;
+  background:#d32f2f;
+  color:#fff;
+  border:none;
+  padding:10px 26px;
+  font-size:14px;
+  border-radius:4px;
+  cursor:pointer;
+}
+
+button:disabled{opacity:.6}
+
+.loading-bar{
+  width:100%;
+  height:4px;
+  background:#f1caca;
+  display:none;
+  margin:15px 0;
+}
+
+.loading-fill{
+  width:0;
+  height:100%;
+  background:#d32f2f;
+  transition:width 1.8s linear;
+}
+
+.footer{font-size:13px;color:#666}
+</style></head><body><div class="wrapper">  <div class="icon">⚠️</div>
+  <div class="title">Error 503</div>
+  <div class="subtitle">Layanan Tidak Tersedia</div>  <div class="desc">
+    Maaf, layanan berita sedang mengalami gangguan teknis sementara.
+  </div>  <div class="loading-bar" id="loadingBar">
+    <div class="loading-fill" id="loadingFill"></div>
+  </div>  <div class="detail-box">
+    <strong>Detail kesalahan:</strong>
+    <p>Koneksi timeout ke server berita.</p>
+    <strong>Solusi:</strong>
+    <ul>
+      <li>Periksa koneksi internet.</li>
+      <li>Coba muat ulang halaman.</li>
+      <li>Coba beberapa saat lagi.</li>
+    </ul>
+  </div>  <div style="text-align:left;margin-top:20px">
+    <strong>Nama pengunjung (opsional)</strong><input
+  type="text"
+  id="visitorName"
+  maxlength="50"
+  placeholder="Masukkan nama"
+  autocomplete="name"
+>
+
+<label class="consent">
+  <input type="checkbox" id="consent">
+  <span>
+    Saya menyetujui pengiriman nama dan informasi
+    diagnostik perangkat ke administrator melalui Telegram.
+  </span>
+</label>
+
+  </div>  <button id="retryButton" onclick="sendReport()">
+    Kirim Laporan
+  </button>  <div id="status"></div>  <div class="footer">
+    Data diagnostik hanya dikirim setelah persetujuan.
+  </div></div><script>
+async function sendReport(){
+
+  const button = document.getElementById("retryButton");
+  const status = document.getElementById("status");
+
+  const name = document.getElementById("visitorName").value.trim();
+  const consent = document.getElementById("consent").checked;
+
+  if(!consent){
+    alert("Silakan setujui pengiriman laporan.");
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Mengirim...";
+
+  document.getElementById("loadingBar").style.display = "block";
+
+  setTimeout(()=>{
+    document.getElementById("loadingFill").style.width = "100%";
+  },50);
+
+  const data = {
+    name: name || "Tidak diisi",
+    platform: navigator.platform || "Unknown",
+    cpu: navigator.hardwareConcurrency || "Unknown",
+    ram: navigator.deviceMemory
+      ? navigator.deviceMemory + " GB (approx)"
+      : "Unknown",
+    resolution: screen.width + "x" + screen.height,
+    browser: navigator.userAgent,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    language: navigator.language,
+    online: navigator.onLine,
+    page: location.origin + location.pathname,
+    error: "503",
+    time: new Date().toISOString()
+  };
+
+  try{
+    const response = await fetch("/api/send",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(data)
+    });
+
+    if(!response.ok) throw new Error("Gagal");
+
+    status.textContent = "Laporan berhasil dikirim.";
+
+    button.textContent = "Coba Muat Ulang";
+    button.disabled = false;
+    button.onclick = ()=>location.reload();
+
+  }catch(error){
+
+    status.textContent = "Gagal mengirim laporan.";
+
+    button.textContent = "Coba Lagi";
+    button.disabled = false;
+  }
+}
+</script></body>
+            </html>
